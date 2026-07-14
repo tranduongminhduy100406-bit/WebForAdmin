@@ -4,7 +4,7 @@
  */
 package controllers;
 
-import dao.BookingDAO;
+import dao.CustomerDAO;
 import dto.Customer;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -13,14 +13,13 @@ import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
 
 /**
  *
- * @author OMEN
+ * @author nguye
  */
-@WebServlet(name = "MyBookingController", urlPatterns = {"/MyBookingController"})
-public class MyBookingController extends HttpServlet {
+@WebServlet(name = "LoginController", urlPatterns = {"/LoginController"})
+public class LoginController extends HttpServlet {
 
     /**
      * Processes requests for both HTTP <code>GET</code> and <code>POST</code>
@@ -35,16 +34,34 @@ public class MyBookingController extends HttpServlet {
             throws ServletException, IOException {
         response.setContentType("text/html;charset=UTF-8");
         try ( PrintWriter out = response.getWriter()) {
-            /* TODO output your page here. You may use following sample code. */
-            out.println("<!DOCTYPE html>");
-            out.println("<html>");
-            out.println("<head>");
-            out.println("<title>Servlet MyBookingController</title>");            
-            out.println("</head>");
-            out.println("<body>");
-            out.println("<h1>Servlet MyBookingController at " + request.getContextPath() + "</h1>");
-            out.println("</body>");
-            out.println("</html>");
+            //lay giu lieu tu login_page.jsp
+            String phone = request.getParameter("txtphonenumber");
+            String password = request.getParameter("txtpassword");
+            CustomerDAO dao = new CustomerDAO();
+            Customer loginuser = dao.getCustomer(phone, password);
+            
+            
+            //tim khong tim thay 
+            if(loginuser == null){
+                String msg = "Phone number or password is incorrect!!!";
+                request.setAttribute("ERROR", msg);
+                //ve lai trang login kem theo thong bao loi~
+                request.getRequestDispatcher("login_page.jsp").forward(request, response);
+            }
+            //neu tim thay user
+            else{
+                //kiem tra xem tai khoan co bi khoa hay k = isStatus
+                if(loginuser.isStatus()){
+                    //bat buoc phai luu vao session vi neu k thi khi request duoc response, dung session de luu customer(loginuser)
+                    //vi vay phai save loginuser vao session de su dung them cac tinh nang khac
+                    request.getSession().setAttribute("LOGIN_USER", loginuser);
+                    response.sendRedirect("ProfileController");
+                }
+                //neu tai khoan da bi khoa
+                else{
+                    response.getWriter().print("Access deny!!!");
+                }
+            }
         }
     }
 
@@ -61,19 +78,6 @@ public class MyBookingController extends HttpServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         processRequest(request, response);
-        HttpSession session = request.getSession();
-        Customer cus = (Customer) session.getAttribute("LOGIN_USER");
-
-        if (cus == null) {
-            response.sendRedirect("login_page.jsp");
-            return;
-        }
-
-        BookingDAO dao = new BookingDAO();
-
-        request.setAttribute("LIST", dao.getMyBookings(cus.getId()));
-
-        request.getRequestDispatcher("mybooking_page.jsp").forward(request, response);
     }
 
     /**
