@@ -60,4 +60,56 @@ public class BookingDAO {
 
         return list;
     }
+    
+    public List<MyBooking> getAllBookings() {
+
+    List<MyBooking> list = new ArrayList<>();
+
+    String sql = "SELECT B.BookingID, "
+            + "B.CustomerID, "
+            + "B.VehicleID, "
+            + "B.BookingDate, "
+            + "B.SlotTime, "
+            + "B.ServiceType, "
+            + "B.BookingStatus, "
+            + "B.Notes, "
+            + "B.CreatedAt, "
+            + "V.LicensePlate "
+            + "FROM Bookings B "
+            + "JOIN Vehicles V "
+            + "ON B.VehicleID = V.VehicleID "
+            + "ORDER BY B.BookingDate DESC";
+
+    try (
+            Connection cn = DBUtils.getConnection();
+            PreparedStatement st = cn.prepareStatement(sql);
+            ResultSet rs = st.executeQuery()) {
+
+        while (rs.next()) {
+
+            MyBooking b = new MyBooking(
+                    rs.getInt("BookingID"),
+                    rs.getInt("CustomerID"),
+                    rs.getInt("VehicleID"),
+                    rs.getString("BookingDate"),
+                    rs.getString("SlotTime"),
+                    rs.getString("ServiceType"),
+                    rs.getString("BookingStatus"),
+                    rs.getString("Notes"),
+                    rs.getTimestamp("CreatedAt"),
+                    rs.getString("LicensePlate")
+            );
+
+            list.add(b);
+
+        }
+
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+
+    return list;
 }
+}
+
+
