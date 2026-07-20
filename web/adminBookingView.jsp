@@ -118,6 +118,23 @@
 
     </div>
 
+    <div style="margin-bottom:20px;">
+
+<form action="AdminBookingController" method="get">
+
+<input type="text"
+       name="keyword"
+       value="${KEYWORD}"
+       placeholder="Search Booking ID, Customer ID, License Plate"
+       style="padding:10px;width:300px;">
+
+<input type="submit"
+       value="Search"
+       style="padding:10px 18px;">
+
+</form>
+
+</div>
     <table>
 
         <tr>

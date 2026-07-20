@@ -19,7 +19,22 @@ public class AdminBookingController extends HttpServlet {
 
             BookingDAO dao = new BookingDAO();
 
-            List<MyBooking> list = dao.getAllBookings();
+            String keyword = request.getParameter("keyword");
+
+            List<MyBooking> list;
+
+            if (keyword == null || keyword.trim().isEmpty()) {
+
+                list = dao.getAllBookings();
+
+            } else {
+
+                list = dao.searchBookings(keyword);
+
+            }
+
+            request.setAttribute("LIST", list);
+            request.setAttribute("KEYWORD", keyword);
 
             request.setAttribute("LIST", list);
 
