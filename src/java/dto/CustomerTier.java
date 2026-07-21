@@ -1,6 +1,8 @@
 /*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
+ * DTO for table dbo.CustomerTiers
+ * Updated for Loyalty Engine - fields now match the actual DB schema
+ * (previous version had a "discountPercent" field that did not exist
+ * in the database; the real column is PointBonusPercent).
  */
 package dto;
 
@@ -11,23 +13,23 @@ public class CustomerTier implements Serializable {
     private int tierID;
     private String tierName;
     private int minBookings;
-    private double discountPercent;
+    private double minSpend;
+    private int pointBonusPercent;
     private int priorityLevel;
+    private String perks;
 
     public CustomerTier() {
     }
 
-    public CustomerTier(int tierID,
-            String tierName,
-            int minBookings,
-            double discountPercent,
-            int priorityLevel) {
-
+    public CustomerTier(int tierID, String tierName, int minBookings, double minSpend,
+            int pointBonusPercent, int priorityLevel, String perks) {
         this.tierID = tierID;
         this.tierName = tierName;
         this.minBookings = minBookings;
-        this.discountPercent = discountPercent;
+        this.minSpend = minSpend;
+        this.pointBonusPercent = pointBonusPercent;
         this.priorityLevel = priorityLevel;
+        this.perks = perks;
     }
 
     public int getTierID() {
@@ -54,12 +56,20 @@ public class CustomerTier implements Serializable {
         this.minBookings = minBookings;
     }
 
-    public double getDiscountPercent() {
-        return discountPercent;
+    public double getMinSpend() {
+        return minSpend;
     }
 
-    public void setDiscountPercent(double discountPercent) {
-        this.discountPercent = discountPercent;
+    public void setMinSpend(double minSpend) {
+        this.minSpend = minSpend;
+    }
+
+    public int getPointBonusPercent() {
+        return pointBonusPercent;
+    }
+
+    public void setPointBonusPercent(int pointBonusPercent) {
+        this.pointBonusPercent = pointBonusPercent;
     }
 
     public int getPriorityLevel() {
@@ -68,5 +78,13 @@ public class CustomerTier implements Serializable {
 
     public void setPriorityLevel(int priorityLevel) {
         this.priorityLevel = priorityLevel;
+    }
+
+    public String getPerks() {
+        return perks;
+    }
+
+    public void setPerks(String perks) {
+        this.perks = perks;
     }
 }
