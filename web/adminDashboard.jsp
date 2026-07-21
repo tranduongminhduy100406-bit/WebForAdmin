@@ -184,6 +184,22 @@
 
         </div>
 
+                <!-- Loyalty -->
+
+        <div class="card">
+
+            <div class="icon">🏆</div>
+
+            <h3>Loyalty Program</h3>
+
+            <p>
+                Review tiers, run points expiry, manage rewards.
+            </p>
+
+            <a href="AdminLoyaltyController" class="btn">
+                Manage Loyalty
+            </a>
+         </div>
     </div>
 
 </div>
