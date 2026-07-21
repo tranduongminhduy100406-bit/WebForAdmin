@@ -55,7 +55,7 @@
             border-left: 4px solid #007bff;
             border-radius: 6px;
             padding: 14px 18px;
-            margin-bottom: 25px;
+            margin-bottom: 15px;
         }
 
         .info-box h4 {
@@ -70,6 +70,21 @@
             color: #495057;
             font-size: 13px;
             line-height: 1.6;
+        }
+
+        /* Thêm style cho Tier Box đồng bộ phong cách */
+        .tier-box {
+            background-color: #f0f7ff;
+            border-left: 4px solid #00a8ff;
+            border-radius: 6px;
+            padding: 14px 18px;
+            margin-bottom: 25px;
+            font-size: 13px;
+            color: #2d3436;
+        }
+
+        .tier-box p {
+            margin-bottom: 4px;
         }
 
         .form-grid {
@@ -114,6 +129,12 @@
         input:focus, select:focus, textarea:focus {
             border-color: #007bff;
             box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+        }
+
+        input[readonly] {
+            background-color: #e9ecef;
+            color: #495057;
+            cursor: not-allowed;
         }
 
         .slot-container {
@@ -224,20 +245,33 @@
             </ul>
         </div>
 
-        <!-- SỬA TÊN ACTION THÀNH CheckSlotController ĐỂ ĐỒNG BỘ VỚI SERVLET -->
+        <!-- [MỚI 1] THÊM THÔNG TIN TIER THÀNH VIÊN -->
+        <div class="tier-box">
+            <p><strong>Your tier:</strong></p>
+            <p>You can book up to <strong>7 days</strong> in advance.</p>
+        </div>
+
+        <!-- FORM CHÍNH -->
         <form action="CheckSlotController" method="post">
 
-            <!-- Customer ID & Vehicle ID -->
-            <div class="form-grid">
-                <div class="form-group">
-                    <label>Customer ID <span class="required">*</span></label>
-                    <input type="text" name="customerID" placeholder="Example: 1" required value="${param.customerID}">
-                </div>
+            <!-- Customer ID (Ẩn) & Vehicle Dropdown [MỚI 2] -->
+            <input type="hidden" name="customerID" value="${not empty sessionScope.user.customerID ? sessionScope.user.customerID : (not empty param.customerID ? param.customerID : '1')}">
 
-                <div class="form-group">
-                    <label>Vehicle ID <span class="required">*</span></label>
-                    <input type="text" name="vehicleID" placeholder="Example: 1" required value="${param.vehicleID}">
-                </div>
+            <div class="form-group">
+                <label>Vehicle <span class="required">*</span></label>
+                <select name="vehicleID" required>
+                    <option value="">-- Select Vehicle --</option>
+                    <c:forEach var="v" items="${vehicleList}">
+                        <option value="${v.vehicleID}" ${param.vehicleID == v.vehicleID ? 'selected' : ''}>
+                            ${v.licensePlate} (${v.vehicleType})
+                        </option>
+                    </c:forEach>
+                    <%-- Dữ liệu mẫu hiển thị nếu chưa truyền vehicleList từ Controller --%>
+                    <c:if test="${empty vehicleList}">
+                        <option value="1" ${param.vehicleID == '1' ? 'selected' : ''}>Vehicle 1 - 51F-123.45</option>
+                        <option value="2" ${param.vehicleID == '2' ? 'selected' : ''}>Vehicle 2 - 51H-999.99</option>
+                    </c:if>
+                </select>
             </div>
 
             <!-- Booking Date & Time Slot -->
@@ -278,15 +312,20 @@
                 </div>
             </div>
 
-            <!-- Service Type: Sửa value thành tên chuỗi dịch vụ chuẩn -->
+            <!-- Service Type [MỚI 3: Thêm data-price và sk event listener] -->
             <div class="form-group">
                 <label>Service Type <span class="required">*</span></label>
-                <select name="serviceID" required>
-                    <option value="">-- Select Service --</option>
-                    <option value="Basic Wash">Basic Wash</option>
-                    <option value="Premium Wash & Wax">Premium Wash & Wax</option>
-                    <option value="Full Interior Detailing">Full Interior Detailing</option>
+                <select name="serviceID" id="serviceSelect" onchange="updateTotalAmount()" required>
+                    <option value="Basic Wash" data-price="150000">Basic Wash - 150,000 VND</option>
+                    <option value="Premium Wash & Wax" data-price="300000">Premium Wash & Wax - 300,000 VND</option>
+                    <option value="Full Interior Detailing" data-price="500000">Full Interior Detailing - 500,000 VND</option>
                 </select>
+            </div>
+
+            <!-- Total Amount [MỚI 4] -->
+            <div class="form-group">
+                <label>Total Amount</label>
+                <input type="text" id="totalAmount" name="totalAmount" value="150000" readonly>
             </div>
 
             <!-- Additional Notes -->
@@ -303,6 +342,21 @@
         <a href="adminDashboard.jsp" class="back-link">← Back to Admin Dashboard</a>
 
     </div>
+
+    <!-- Script tự động cập nhật Total Amount khi đổi dịch vụ -->
+    <script>
+        function updateTotalAmount() {
+            var select = document.getElementById("serviceSelect");
+            var selectedOption = select.options[select.selectedIndex];
+            var price = selectedOption.getAttribute("data-price");
+            
+            if (price) {
+                document.getElementById("totalAmount").value = price;
+            } else {
+                document.getElementById("totalAmount").value = "0";
+            }
+        }
+    </script>
 
 </body>
 </html>
