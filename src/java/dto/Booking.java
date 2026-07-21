@@ -16,6 +16,9 @@ public class Booking implements Serializable {
     public Booking() {
     }
 
+
+
+    
     public Booking(int bookingID, int customerID, int vehicleID, Timestamp bookingDate, 
                    String serviceType, double totalAmount, String bookingStatus, String notes) {
         this.bookingID = bookingID;

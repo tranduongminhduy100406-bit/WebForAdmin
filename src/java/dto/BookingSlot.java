@@ -12,12 +12,14 @@ public class BookingSlot {
     private String serviceType;
     private String bookingStatus;
     private String notes;
+    private double totalAmount;
     private Timestamp createdAt;
     private String licensePlate;
     // Constructor 1: Empty
     public BookingSlot() {
     }
 
+    
     // Constructor 2: For INSERT
     public BookingSlot(int customerID, int vehicleID, String bookingDate,
                        String slotTime, String serviceType, String notes) {
@@ -30,10 +32,7 @@ public class BookingSlot {
         this.notes = notes;
     }
 
-    // Constructor 3: Full data
-    public BookingSlot(int bookingID, int customerID, int vehicleID, String bookingDate,
-                       String slotTime, String serviceType, String bookingStatus,
-                       String notes, Timestamp createdAt) {
+    public BookingSlot(int bookingID, int customerID, int vehicleID, String bookingDate, String slotTime, String serviceType, String bookingStatus, String notes, Timestamp createdAt, String licensePlate) {
         this.bookingID = bookingID;
         this.customerID = customerID;
         this.vehicleID = vehicleID;
@@ -43,7 +42,34 @@ public class BookingSlot {
         this.bookingStatus = bookingStatus;
         this.notes = notes;
         this.createdAt = createdAt;
+        this.licensePlate = licensePlate;
     }
+
+    public BookingSlot(int customerID, int vehicleID, String bookingDate, String serviceType, double totalAmount) {
+        this.customerID = customerID;
+        this.vehicleID = vehicleID;
+        this.bookingDate = bookingDate;
+        this.serviceType = serviceType;
+        this.totalAmount = totalAmount;
+    }
+
+    
+    // Constructor 3: Full data
+
+    public BookingSlot(int bookingID, int customerID, int vehicleID, String bookingDate, String slotTime, String serviceType, String bookingStatus, String notes, double totalAmount, Timestamp createdAt, String licensePlate) {
+        this.bookingID = bookingID;
+        this.customerID = customerID;
+        this.vehicleID = vehicleID;
+        this.bookingDate = bookingDate;
+        this.slotTime = slotTime;
+        this.serviceType = serviceType;
+        this.bookingStatus = bookingStatus;
+        this.notes = notes;
+        this.totalAmount = totalAmount;
+        this.createdAt = createdAt;
+        this.licensePlate = licensePlate;
+    }
+   
 
     public int getBookingID() {
         return bookingID;
@@ -123,6 +149,14 @@ public class BookingSlot {
 
     public void setLicensePlate(String licensePlate) {
         this.licensePlate = licensePlate;
+    }
+
+    public double getTotalAmount() {
+        return totalAmount;
+    }
+
+    public void setTotalAmount(double totalAmount) {
+        this.totalAmount = totalAmount;
     }
 
     @Override

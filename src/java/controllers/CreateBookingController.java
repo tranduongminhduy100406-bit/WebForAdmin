@@ -1,8 +1,11 @@
 package controller;
 
 import dao.BookingDAO;
+import dto.Booking;
+import dto.BookingSlot;
 import dto.Customer;
 import java.io.IOException;
+import java.sql.Timestamp;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.*;
@@ -28,9 +31,10 @@ public class CreateBookingController extends HttpServlet {
             String bookingDate = request.getParameter("bookingDate");
             String serviceType = request.getParameter("serviceType");
             double totalAmount = Double.parseDouble(request.getParameter("totalAmount"));
-
-            BookingDAO dao = new BookingDAO();
-            boolean check = dao.createBooking(customerID, vehicleID, bookingDate, serviceType, totalAmount);
+ 
+            BookingSlot bo = new BookingSlot(customerID, vehicleID, bookingDate, serviceType, totalAmount);
+                    BookingDAO dao = new BookingDAO();
+            boolean check = dao.createBooking(bo);
 
             if (check) {
                 session.setAttribute("MSG", "Booking successfully!");

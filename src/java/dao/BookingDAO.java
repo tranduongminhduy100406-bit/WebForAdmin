@@ -281,4 +281,72 @@ public class BookingDAO {
     
         return 0;
     }
+        // =========================================================
+// CHECK VEHICLE AVAILABLE FOR DATE + SLOT
+// Một xe không được đặt 2 lần cùng ngày và cùng slot
+// =========================================================
+public boolean isVehicleAvailableForSlot(
+        int vehicleID,
+        String bookingDate,
+        String slotTime) {
+
+    String sql = "SELECT COUNT(*) "
+            + "FROM Bookings "
+            + "WHERE VehicleID = ? "
+            + "AND CAST(BookingDate AS DATE) = ? "
+            + "AND SlotTime = ?";
+
+    try (
+            Connection cn = DBUtils.getConnection();
+            PreparedStatement st = cn.prepareStatement(sql)
+    ) {
+
+        st.setInt(1, vehicleID);
+        st.setString(2, bookingDate);
+        st.setString(3, slotTime);
+
+        ResultSet rs = st.executeQuery();
+
+        if (rs.next()) {
+            return rs.getInt(1) == 0;
+        }
+
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+
+    return false;
+}
+
+
+// =========================================================
+// CREATE BOOKING
+// =========================================================
+public boolean createBooking(dto.BookingSlot booking) {
+
+    String sql = "INSERT INTO Bookings "
+            + "(CustomerID, VehicleID, BookingDate, SlotTime, "
+            + "ServiceType, Notes, BookingStatus, CreatedAt) "
+            + "VALUES (?, ?, ?, ?, ?, ?, ?, GETDATE())";
+
+    try (
+            Connection cn = DBUtils.getConnection();
+            PreparedStatement st = cn.prepareStatement(sql)
+    ) {
+
+        st.setInt(1, booking.getCustomerID());
+        st.setInt(2, booking.getVehicleID());
+        st.setString(3, booking.getBookingDate());
+        st.setString(4, booking.getSlotTime());
+        st.setString(5, booking.getServiceType());
+        st.setString(6, booking.getNotes());
+        st.setString(7, "Pending");
+
+        return st.executeUpdate() > 0;
+
+    } catch (Exception e) {
+        e.printStackTrace();
+        return false;
+    }
+}
 }
