@@ -154,14 +154,14 @@
 
             <div class="icon">👥</div>
 
-            <h3>Manage Customers</h3>
+            <h3>Manage Account</h3>
 
             <p>
-                Coming Soon...
+                View all accounts and update account.
             </p>
 
-            <a href="#" class="btn">
-                Coming Soon
+            <a href="AdminAccountController" class="btn">
+                View All Account
             </a>
 
         </div>
