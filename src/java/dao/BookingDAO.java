@@ -109,32 +109,72 @@ public class BookingDAO {
         return list;
     }
 
-    public List<MyBooking> searchBookings(String keyword) {
+    public List<MyBooking> searchBookings(String keyword, String type) {
 
         List<MyBooking> list = new ArrayList<>();
 
-        String sql
-                = "SELECT B.BookingID, B.CustomerID, B.VehicleID, "
-                + "B.BookingDate, B.SlotTime, "
-                + "B.ServiceType, B.BookingStatus, "
-                + "B.Notes, B.CreatedAt, "
-                + "V.LicensePlate "
-                + "FROM Bookings B "
-                + "JOIN Vehicles V "
-                + "ON B.VehicleID = V.VehicleID "
-                + "WHERE "
-                + "CAST(B.CustomerID AS VARCHAR) LIKE ? "
-                + "OR V.LicensePlate LIKE ? "
-                + "OR B.BookingStatus LIKE ? "
-                + "ORDER BY B.BookingDate DESC";
+        String sql = "";
+        if ("customer".equals(type)) {
+
+            sql
+                    = "SELECT B.BookingID,B.CustomerID,B.VehicleID,"
+                    + "B.BookingDate,B.SlotTime,"
+                    + "B.ServiceType,B.BookingStatus,"
+                    + "B.Notes,B.CreatedAt,"
+                    + "V.LicensePlate "
+                    + "FROM Bookings B "
+                    + "JOIN Vehicles V "
+                    + "ON B.VehicleID=V.VehicleID "
+                    + "WHERE CAST(B.CustomerID AS VARCHAR) LIKE ? "
+                    + "ORDER BY B.BookingDate DESC";
+
+        } else if ("plate".equals(type)) {
+
+            sql
+                    = "SELECT B.BookingID,B.CustomerID,B.VehicleID,"
+                    + "B.BookingDate,B.SlotTime,"
+                    + "B.ServiceType,B.BookingStatus,"
+                    + "B.Notes,B.CreatedAt,"
+                    + "V.LicensePlate "
+                    + "FROM Bookings B "
+                    + "JOIN Vehicles V "
+                    + "ON B.VehicleID=V.VehicleID "
+                    + "WHERE V.LicensePlate LIKE ? "
+                    + "ORDER BY B.BookingDate DESC";
+
+            }else if ("service".equals(type)) {
+
+            sql
+                    = "SELECT B.BookingID,B.CustomerID,B.VehicleID,"
+                    + "B.BookingDate,B.SlotTime,"
+                    + "B.ServiceType,B.BookingStatus,"
+                    + "B.Notes,B.CreatedAt,"
+                    + "V.LicensePlate "
+                    + "FROM Bookings B "
+                    + "JOIN Vehicles V "
+                    + "ON B.VehicleID=V.VehicleID "
+                    + "WHERE B.ServiceType LIKE ? "
+                    + "ORDER BY B.BookingDate DESC";
+        } else {
+
+            sql
+                    = "SELECT B.BookingID,B.CustomerID,B.VehicleID,"
+                    + "B.BookingDate,B.SlotTime,"
+                    + "B.ServiceType,B.BookingStatus,"
+                    + "B.Notes,B.CreatedAt,"
+                    + "V.LicensePlate "
+                    + "FROM Bookings B "
+                    + "JOIN Vehicles V "
+                    + "ON B.VehicleID=V.VehicleID "
+                    + "WHERE B.BookingStatus LIKE ? "
+                    + "ORDER BY B.BookingDate DESC";
+
+        }
 
         try (
                  Connection cn = DBUtils.getConnection();  PreparedStatement st = cn.prepareStatement(sql)) {
 
-            st.setString(1, "%" + keyword + "%");
-            st.setString(2, "%" + keyword + "%");
-            st.setString(3, "%" + keyword + "%");
-          
+           st.setString(1, "%" + keyword.trim() + "%");
 
             ResultSet rs = st.executeQuery();
 

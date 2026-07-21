@@ -20,6 +20,7 @@ public class AdminBookingController extends HttpServlet {
             BookingDAO dao = new BookingDAO();
 
             String keyword = request.getParameter("keyword");
+            String type = request.getParameter("type");
 
             List<MyBooking> list;
 
@@ -29,14 +30,12 @@ public class AdminBookingController extends HttpServlet {
 
             } else {
 
-                list = dao.searchBookings(keyword);
+                list = dao.searchBookings(keyword,type);
 
             }
 
             request.setAttribute("LIST", list);
             request.setAttribute("KEYWORD", keyword);
-
-
 
             request.getRequestDispatcher("adminBookingView.jsp").forward(request, response);
 
