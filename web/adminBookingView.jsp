@@ -146,7 +146,6 @@
             <th>Slot</th>
             <th>Service</th>
             <th>Status</th>
-            <th>Action</th>
 
         </tr>
 
@@ -192,14 +191,7 @@
 
                 </td>
 
-                <td>
-
-                    <a class="btn update"
-                       href="#">
-                        Update
-                    </a>
-
-                </td>
+  
 
             </tr>
 
