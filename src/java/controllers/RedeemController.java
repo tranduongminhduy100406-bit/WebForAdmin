@@ -62,7 +62,7 @@ public class RedeemController extends HttpServlet {
         try {
             int rewardId = Integer.parseInt(request.getParameter("rewardId"));
 
-            int result = loyaltyDao.redeemPoints(customerId, rewardId);
+            int result = loyaltyDao.redeemReward(customerId, rewardId);
 
             String message;
             switch (result) {
@@ -97,7 +97,7 @@ public class RedeemController extends HttpServlet {
         // Re-fetch the customer to show the up-to-date point balance
         // (session copy may be stale after a redemption).
         Customer freshCustomer = customerDao.getCustomerById(customerId);
-        List<Reward> rewards = loyaltyDao.getActiveRewards();
+        List<Reward> rewards = loyaltyDao.getAllRewards();
 
         request.setAttribute("CUSTOMER", freshCustomer);
         request.setAttribute("REWARDS", rewards);
