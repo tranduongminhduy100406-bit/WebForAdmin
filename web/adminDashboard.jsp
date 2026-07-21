@@ -168,21 +168,7 @@
 
         <!-- Placeholder -->
 
-        <div class="card">
-
-            <div class="icon">🚗</div>
-
-            <h3>Manage Services</h3>
-
-            <p>
-                Coming Soon...
-            </p>
-
-            <a href="#" class="btn">
-                Coming Soon
-            </a>
-
-        </div>
+        
 
                 <!-- Loyalty -->
 
