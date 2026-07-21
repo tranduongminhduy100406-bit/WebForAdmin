@@ -36,10 +36,9 @@ public class AdminBookingController extends HttpServlet {
             request.setAttribute("LIST", list);
             request.setAttribute("KEYWORD", keyword);
 
-            request.setAttribute("LIST", list);
 
-            request.getRequestDispatcher("adminBookingView.jsp")
-                    .forward(request, response);
+
+            request.getRequestDispatcher("adminBookingView.jsp").forward(request, response);
 
         } catch (Exception e) {
             e.printStackTrace();

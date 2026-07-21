@@ -122,8 +122,8 @@ public class BookingDAO {
                 + "FROM Bookings B "
                 + "JOIN Vehicles V "
                 + "ON B.VehicleID = V.VehicleID "
-                + "WHERE CAST(B.BookingID AS VARCHAR) LIKE ? "
-                + "OR CAST(B.CustomerID AS VARCHAR) LIKE ? "
+                + "WHERE "
+                + "CAST(B.CustomerID AS VARCHAR) LIKE ? "
                 + "OR V.LicensePlate LIKE ? "
                 + "OR B.BookingStatus LIKE ? "
                 + "ORDER BY B.BookingDate DESC";
@@ -134,7 +134,7 @@ public class BookingDAO {
             st.setString(1, "%" + keyword + "%");
             st.setString(2, "%" + keyword + "%");
             st.setString(3, "%" + keyword + "%");
-            st.setString(4, "%" + keyword + "%");
+          
 
             ResultSet rs = st.executeQuery();
 
