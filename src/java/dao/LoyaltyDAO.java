@@ -9,115 +9,362 @@ import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Loyalty Engine.
  *
- * Covers: - Track points, tier, spend, visits (earnPointsForBooking) -
- * Auto-upgrade/downgrade (runTierReview) - Redemption: points -> reward
- * (redeemPoints) - Expiry: points expire after 12 months
- * (runPointsExpiry)
+ * This is the original DAO (author: ADMIN), kept as-is in style and method
+ * names, with a few additions needed so the rest of the app (Admin +
+ * Customer controllers) can work:
+ *   - getAllTiers()          -> used by AdminLoyaltyController to list tiers
+ *   - getNextRewardInfo()    -> used by NextRewardController (Customer Profile)
+ *   - getAllRewardsForAdmin(), createReward(), toggleRewardStatus()
+ *                             -> Admin "create discount reward" feature
+ * Also fixed: PreparedStatement/ResultSet were never closed (resource leak)
+ * in several methods; runMonthlyTierReview()/runExpirePoints() now return a
+ * log so the admin screen can show what happened (they used to run silently).
+ *
+ * @author ADMIN
  */
 public class LoyaltyDAO {
 
-    // 1 point earned per 1,000 VND spent (per CustomerTiers "Member" perk)
-    private static final int VND_PER_POINT = 1000;
-    private static final int POINT_EXPIRY_MONTHS = 12;
-
-    // ---------- Result codes for redeemPoints ----------
+    // ---------- Result codes for redeemReward ----------
     public static final int REDEEM_SUCCESS = 1;
     public static final int REDEEM_NOT_ENOUGH_POINTS = 0;
     public static final int REDEEM_REWARD_NOT_FOUND = -1;
     public static final int REDEEM_ERROR = -2;
 
     // =========================================================
-    // TIERS
+    // EARN POINTS
     // =========================================================
-    public List<CustomerTier> getAllTiers() {
-        List<CustomerTier> list = new ArrayList<>();
-        String sql = "SELECT TierID, TierName, MinBookings, MinSpend, PointBonusPercent, "
-                + "PriorityLevel, Perks FROM CustomerTiers ORDER BY PriorityLevel ASC";
+    public boolean earnPoints(int customerID, int bookingID, double amount) {
 
-        try ( Connection cn = DBUtils.getConnection();  PreparedStatement st = cn.prepareStatement(sql);  ResultSet rs = st.executeQuery()) {
+        int bonusPercent = getBonusPercent(customerID);
 
-            while (rs.next()) {
-                list.add(mapTier(rs));
+        int basePoints = (int) (amount / 1000);
+        int bonusPoints = (int) (basePoints * bonusPercent / 100.0);
+        int totalPoints = basePoints + bonusPoints;
+
+        if (totalPoints <= 0) {
+            return false;
+        }
+
+        try ( Connection cn = DBUtils.getConnection()) {
+
+            String sqlInsert = "INSERT INTO dbo.Loyalty_Transactions"
+                    + "(CustomerID, BookingID, TransactionType, Points, Description, TransactionDate, ExpiryDate, IsExpired)"
+                    + " VALUES(?,?,?,?,?,?,?,?)";
+            try ( PreparedStatement st = cn.prepareStatement(sqlInsert)) {
+                st.setInt(1, customerID);
+                st.setInt(2, bookingID);
+                st.setString(3, "EARN");
+                st.setInt(4, totalPoints);
+                st.setString(5, "Rua xe - " + basePoints + " diem + thuong " + bonusPoints);
+                st.setDate(6, new Date(System.currentTimeMillis()));
+                st.setDate(7, getExpiryDate());
+                st.setBoolean(8, false);
+                st.executeUpdate();
+            }
+
+            String sqlUpdate = "UPDATE dbo.Customers "
+                    + "SET PointsBalance = PointsBalance + ?, "
+                    + "    TotalBookings = TotalBookings + 1, "
+                    + "    TotalSpent    = TotalSpent    + ? "
+                    + "WHERE CustomerID = ?";
+            try ( PreparedStatement st2 = cn.prepareStatement(sqlUpdate)) {
+                st2.setInt(1, totalPoints);
+                st2.setDouble(2, amount);
+                st2.setInt(3, customerID);
+                st2.executeUpdate();
+            }
+
+            return true;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    // =========================================================
+    // REDEMPTION
+    // =========================================================
+    public int redeemReward(int customerID, int rewardID) {
+
+        Reward reward = getRewardById(rewardID);
+        if (reward == null) {
+            return REDEEM_REWARD_NOT_FOUND;
+        }
+
+        int pointsRequired = reward.getPointsRequired();
+        int currentPoints = getPointsBalance(customerID);
+
+        if (currentPoints < pointsRequired) {
+            return REDEEM_NOT_ENOUGH_POINTS;
+        }
+
+        try ( Connection cn = DBUtils.getConnection()) {
+
+            String sqlInsert = "INSERT INTO dbo.Loyalty_Transactions"
+                    + "(CustomerID, BookingID, TransactionType, Points, Description, TransactionDate, IsExpired)"
+                    + " VALUES(?,?,?,?,?,?,?)";
+            try ( PreparedStatement st = cn.prepareStatement(sqlInsert)) {
+                st.setInt(1, customerID);
+                st.setNull(2, java.sql.Types.INTEGER);   // khong co bookingID khi redeem
+                st.setString(3, "REDEEM");
+                st.setInt(4, pointsRequired);
+                st.setString(5, "Doi thuong: " + reward.getRewardName());
+                st.setDate(6, new Date(System.currentTimeMillis()));
+                st.setBoolean(7, false);
+                st.executeUpdate();
+            }
+
+            String sqlUpdate = "UPDATE dbo.Customers "
+                    + "SET PointsBalance = PointsBalance - ? "
+                    + "WHERE CustomerID = ?";
+            try ( PreparedStatement st2 = cn.prepareStatement(sqlUpdate)) {
+                st2.setInt(1, pointsRequired);
+                st2.setInt(2, customerID);
+                st2.executeUpdate();
+            }
+
+            return REDEEM_SUCCESS;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return REDEEM_ERROR;
+        }
+    }
+
+    // =========================================================
+    // TIER REVIEW (monthly, run manually by Admin)
+    // =========================================================
+    /**
+     * NOTE: tier thresholds are hard-coded in calcTier() (kept as in the
+     * original code). If Admin needs to configure tier rules from the DB
+     * later, calcTier() must be changed to read CustomerTiers.MinBookings /
+     * MinSpend instead of the literal numbers below.
+     */
+    public List<String> runMonthlyTierReview() {
+
+        List<String> log = new ArrayList<>();
+
+        try ( Connection cn = DBUtils.getConnection()) {
+
+            String sqlSelect = "SELECT CustomerID, FullName, TierID, TotalBookings, TotalSpent FROM dbo.Customers WHERE Status = 1";
+
+            try ( PreparedStatement st = cn.prepareStatement(sqlSelect);  ResultSet table = st.executeQuery()) {
+
+                List<int[]> changes = new ArrayList<>(); // [custId, oldTierId, newTierId]
+                List<String> names = new ArrayList<>();
+
+                while (table.next()) {
+                    int cusId = table.getInt("CustomerID");
+                    String name = table.getString("FullName");
+                    int oldTierID = table.getInt("TierID");
+                    int totalBookings = table.getInt("TotalBookings");
+                    double totalSpent = table.getDouble("TotalSpent");
+
+                    int newTierID = calcTier(totalBookings, totalSpent);
+
+                    if (newTierID != oldTierID) {
+                        changes.add(new int[]{cusId, oldTierID, newTierID});
+                        names.add(name);
+                    }
+                }
+
+                String sqlUpdate = "UPDATE dbo.Customers SET TierID = ? WHERE CustomerID = ?";
+                for (int i = 0; i < changes.size(); i++) {
+                    int[] c = changes.get(i);
+                    try ( PreparedStatement st2 = cn.prepareStatement(sqlUpdate)) {
+                        st2.setInt(1, c[2]);
+                        st2.setInt(2, c[0]);
+                        st2.executeUpdate();
+                    }
+
+                    String direction = c[2] > c[1] ? "UPGRADED" : "DOWNGRADED";
+                    log.add(names.get(i) + " (ID " + c[0] + "): " + tierName(c[1]) + " -> "
+                            + tierName(c[2]) + " [" + direction + "]");
+                }
             }
 
         } catch (Exception e) {
             e.printStackTrace();
+            log.add("ERROR while running tier review: " + e.getMessage());
         }
 
-        return list;
+        if (log.isEmpty()) {
+            log.add("No tier changes. Everyone is already in the correct tier.");
+        }
+
+        return log;
     }
 
-    public CustomerTier getTierById(int tierId) {
-        String sql = "SELECT TierID, TierName, MinBookings, MinSpend, PointBonusPercent, "
-                + "PriorityLevel, Perks FROM CustomerTiers WHERE TierID = ?";
+    // =========================================================
+    // EXPIRY: points expire after 12 months (run manually by Admin)
+    // =========================================================
+    public List<String> runExpirePoints() {
 
-        try ( Connection cn = DBUtils.getConnection();  PreparedStatement st = cn.prepareStatement(sql)) {
+        List<String> log = new ArrayList<>();
 
-            st.setInt(1, tierId);
-            ResultSet rs = st.executeQuery();
+        try ( Connection cn = DBUtils.getConnection()) {
 
-            if (rs.next()) {
-                return mapTier(rs);
+            // buoc 1: lay tong diem het han cua tung khach
+            String sqlSelect = "SELECT L.CustomerID, C.FullName, SUM(L.Points) AS ExpiredPoints "
+                    + "FROM dbo.Loyalty_Transactions L "
+                    + "JOIN dbo.Customers C ON C.CustomerID = L.CustomerID "
+                    + "WHERE L.TransactionType = 'EARN' "
+                    + "  AND L.IsExpired = 0 "
+                    + "  AND L.ExpiryDate < CAST(GETDATE() AS DATE) "
+                    + "GROUP BY L.CustomerID, C.FullName";
+
+            try ( PreparedStatement st = cn.prepareStatement(sqlSelect);  ResultSet table = st.executeQuery()) {
+
+                while (table.next()) {
+                    int cusId = table.getInt("CustomerID");
+                    String name = table.getString("FullName");
+                    int expiredPoints = table.getInt("ExpiredPoints");
+
+                    // buoc 2: tru diem het han khoi PointsBalance
+                    String sqlUpdate = "UPDATE dbo.Customers "
+                            + "SET PointsBalance = PointsBalance - ? "
+                            + "WHERE CustomerID = ?";
+                    try ( PreparedStatement st2 = cn.prepareStatement(sqlUpdate)) {
+                        st2.setInt(1, expiredPoints);
+                        st2.setInt(2, cusId);
+                        st2.executeUpdate();
+                    }
+
+                    log.add(name + " (ID " + cusId + "): " + expiredPoints + " points expired");
+                }
+            }
+
+            // buoc 3: danh dau IsExpired = 1 cho tat ca dong da het han
+            String sqlMark = "UPDATE dbo.Loyalty_Transactions "
+                    + "SET IsExpired = 1 "
+                    + "WHERE TransactionType = 'EARN' "
+                    + "  AND IsExpired = 0 "
+                    + "  AND ExpiryDate < CAST(GETDATE() AS DATE)";
+            try ( PreparedStatement mark = cn.prepareStatement(sqlMark)) {
+                mark.executeUpdate();
             }
 
         } catch (Exception e) {
             e.printStackTrace();
+            log.add("ERROR while running points expiry: " + e.getMessage());
         }
 
-        return null;
-    }
+        if (log.isEmpty()) {
+            log.add("No points expired today.");
+        }
 
-    private CustomerTier mapTier(ResultSet rs) throws Exception {
-        CustomerTier t = new CustomerTier();
-        t.setTierID(rs.getInt("TierID"));
-        t.setTierName(rs.getString("TierName"));
-        t.setMinBookings(rs.getInt("MinBookings"));
-        t.setMinSpend(rs.getDouble("MinSpend"));
-        t.setPointBonusPercent(rs.getInt("PointBonusPercent"));
-        t.setPriorityLevel(rs.getInt("PriorityLevel"));
-        t.setPerks(rs.getString("Perks"));
-        return t;
+        return log;
     }
 
     // =========================================================
     // REWARDS
     // =========================================================
-    public List<Reward> getActiveRewards() {
-        List<Reward> list = new ArrayList<>();
-        String sql = "SELECT RewardID, RewardName, PointsRequired, Description, IsActive "
-                + "FROM Rewards WHERE IsActive = 1 ORDER BY PointsRequired ASC";
+    public List<Reward> getAllRewards() {
+        List<Reward> result = new ArrayList<>();
 
-        try ( Connection cn = DBUtils.getConnection();  PreparedStatement st = cn.prepareStatement(sql);  ResultSet rs = st.executeQuery()) {
+        String sql = "SELECT RewardID, RewardName, PointsRequired, Description, IsActive, "
+                + "DiscountType, DiscountValue "
+                + "FROM dbo.Rewards WHERE IsActive = 1 ORDER BY PointsRequired";
 
-            while (rs.next()) {
-                list.add(mapReward(rs));
+        try ( Connection cn = DBUtils.getConnection();  PreparedStatement st = cn.prepareStatement(sql);  ResultSet table = st.executeQuery()) {
+
+            while (table.next()) {
+                result.add(mapReward(table));
             }
 
         } catch (Exception e) {
             e.printStackTrace();
         }
 
-        return list;
+        return result;
     }
 
-    public Reward getRewardById(int rewardId) {
-        String sql = "SELECT RewardID, RewardName, PointsRequired, Description, IsActive "
-                + "FROM Rewards WHERE RewardID = ?";
+    /** Admin management view: returns EVERY reward, active and inactive. */
+    public List<Reward> getAllRewardsForAdmin() {
+        List<Reward> result = new ArrayList<>();
+
+        String sql = "SELECT RewardID, RewardName, PointsRequired, Description, IsActive, "
+                + "DiscountType, DiscountValue "
+                + "FROM dbo.Rewards ORDER BY IsActive DESC, PointsRequired";
+
+        try ( Connection cn = DBUtils.getConnection();  PreparedStatement st = cn.prepareStatement(sql);  ResultSet table = st.executeQuery()) {
+
+            while (table.next()) {
+                result.add(mapReward(table));
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return result;
+    }
+
+    /**
+     * Admin creates a new discount-type reward, e.g.
+     * createReward("10% Off Next Wash", 300, "...", "PERCENT", 10)
+     * createReward("Free Wax", 500, "...", "FREE", 0)
+     */
+    public boolean createReward(String rewardName, int pointsRequired, String description,
+            String discountType, double discountValue) {
+
+        String sql = "INSERT INTO dbo.Rewards (RewardName, PointsRequired, Description, IsActive, "
+                + "DiscountType, DiscountValue) VALUES (?, ?, ?, 1, ?, ?)";
 
         try ( Connection cn = DBUtils.getConnection();  PreparedStatement st = cn.prepareStatement(sql)) {
 
-            st.setInt(1, rewardId);
-            ResultSet rs = st.executeQuery();
+            st.setString(1, rewardName);
+            st.setInt(2, pointsRequired);
+            st.setString(3, description);
+            st.setString(4, discountType);
+            st.setDouble(5, discountValue);
 
-            if (rs.next()) {
-                return mapReward(rs);
+            return st.executeUpdate() > 0;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    /** Toggles a reward between Active / Inactive (soft enable-disable). */
+    public boolean toggleRewardStatus(int rewardId, boolean active) {
+
+        String sql = "UPDATE dbo.Rewards SET IsActive = ? WHERE RewardID = ?";
+
+        try ( Connection cn = DBUtils.getConnection();  PreparedStatement st = cn.prepareStatement(sql)) {
+
+            st.setBoolean(1, active);
+            st.setInt(2, rewardId);
+
+            return st.executeUpdate() > 0;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    private Reward getRewardById(int rewardID) {
+
+        String sql = "SELECT RewardID, RewardName, PointsRequired, Description, IsActive, "
+                + "DiscountType, DiscountValue "
+                + "FROM dbo.Rewards WHERE RewardID = ? AND IsActive = 1";
+
+        try ( Connection cn = DBUtils.getConnection();  PreparedStatement st = cn.prepareStatement(sql)) {
+
+            st.setInt(1, rewardID);
+            try ( ResultSet table = st.executeQuery()) {
+                if (table.next()) {
+                    return mapReward(table);
+                }
             }
 
         } catch (Exception e) {
@@ -134,34 +381,73 @@ public class LoyaltyDAO {
         r.setPointsRequired(rs.getInt("PointsRequired"));
         r.setDescription(rs.getString("Description"));
         r.setActive(rs.getBoolean("IsActive"));
+        r.setDiscountType(rs.getString("DiscountType"));
+        r.setDiscountValue(rs.getDouble("DiscountValue"));
         return r;
     }
 
     // =========================================================
-    // TRANSACTION HISTORY
+    // HISTORY
     // =========================================================
-    public List<LoyaltyTransaction> getTransactionHistory(int customerId) {
-        List<LoyaltyTransaction> list = new ArrayList<>();
-        String sql = "SELECT TransactionID, CustomerID, BookingID, TransactionType, Points, "
-                + "Description, TransactionDate, ExpiryDate, IsExpired "
-                + "FROM Loyalty_Transactions WHERE CustomerID = ? ORDER BY TransactionDate DESC";
+    public List<LoyaltyTransaction> getHistory(int customerID) {
+        List<LoyaltyTransaction> result = new ArrayList<>();
+
+        String sql = "SELECT TransactionID, CustomerID, BookingID, TransactionType, "
+                + "       Points, Description, TransactionDate, ExpiryDate, IsExpired "
+                + "FROM dbo.Loyalty_Transactions "
+                + "WHERE CustomerID = ? "
+                + "ORDER BY TransactionDate DESC";
 
         try ( Connection cn = DBUtils.getConnection();  PreparedStatement st = cn.prepareStatement(sql)) {
 
-            st.setInt(1, customerId);
-            ResultSet rs = st.executeQuery();
+            st.setInt(1, customerID);
+            try ( ResultSet table = st.executeQuery()) {
+                while (table.next()) {
+                    LoyaltyTransaction t = new LoyaltyTransaction();
+                    t.setTransactionID(table.getInt("TransactionID"));
+                    t.setCustomerID(table.getInt("CustomerID"));
+                    t.setBookingID(table.getInt("BookingID"));
+                    t.setTransactionType(table.getString("TransactionType"));
+                    t.setPoints(table.getInt("Points"));
+                    t.setDescription(table.getString("Description"));
+                    t.setTransactionDate(table.getDate("TransactionDate"));
+                    t.setExpiryDate(table.getDate("ExpiryDate"));
+                    t.setIsExpired(table.getBoolean("IsExpired"));
+                    result.add(t);
+                }
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return result;
+    }
+
+    // =========================================================
+    // TIERS  (added: needed by AdminLoyaltyController + NextRewardController)
+    // =========================================================
+    /**
+     * Ordered by TierID ascending, which matches the tier numbers returned
+     * by calcTier() (1=Member, 2=Silver, 3=Gold, 4=Platinum).
+     */
+    public List<CustomerTier> getAllTiers() {
+        List<CustomerTier> list = new ArrayList<>();
+
+        String sql = "SELECT TierID, TierName, MinBookings, MinSpend, PointBonusPercent, "
+                + "PriorityLevel, Perks FROM dbo.CustomerTiers ORDER BY TierID ASC";
+
+        try ( Connection cn = DBUtils.getConnection();  PreparedStatement st = cn.prepareStatement(sql);  ResultSet rs = st.executeQuery()) {
 
             while (rs.next()) {
-                LoyaltyTransaction t = new LoyaltyTransaction();
-                t.setTransactionID(rs.getInt("TransactionID"));
-                t.setCustomerID(rs.getInt("CustomerID"));
-                t.setBookingID(rs.getInt("BookingID"));
-                t.setTransactionType(rs.getString("TransactionType"));
-                t.setPoints(rs.getInt("Points"));
-                t.setDescription(rs.getString("Description"));
-                t.setTransactionDate(rs.getDate("TransactionDate"));
-                t.setExpiryDate(rs.getDate("ExpiryDate"));
-                t.setIsExpired(rs.getBoolean("IsExpired"));
+                CustomerTier t = new CustomerTier();
+                t.setTierID(rs.getInt("TierID"));
+                t.setTierName(rs.getString("TierName"));
+                t.setMinBookings(rs.getInt("MinBookings"));
+                t.setMinSpend(rs.getDouble("MinSpend"));
+                t.setPointBonusPercent(rs.getInt("PointBonusPercent"));
+                t.setPriorityLevel(rs.getInt("PriorityLevel"));
+                t.setPerks(rs.getString("Perks"));
                 list.add(t);
             }
 
@@ -172,13 +458,24 @@ public class LoyaltyDAO {
         return list;
     }
 
-    // =========================================================
-    // NEXT REWARD INFO (for Customer Profile page)
-    // =========================================================
+    private String tierName(int tierId) {
+        for (CustomerTier t : getAllTiers()) {
+            if (t.getTierID() == tierId) {
+                return t.getTierName();
+            }
+        }
+        return "Unknown";
+    }
+
+    /**
+     * Customer Profile requirement: "View: tier, points balance, next reward".
+     * Finds the next tier above the customer's current one (by TierID) and
+     * how many bookings remain to reach it.
+     */
     public NextRewardInfo getNextRewardInfo(int customerId) {
 
-        String sql = "SELECT c.TotalBookings, c.TotalSpent, t.TierID, t.TierName, t.PriorityLevel "
-                + "FROM Customers c JOIN CustomerTiers t ON c.TierID = t.TierID "
+        String sql = "SELECT c.TotalBookings, c.TotalSpent, t.TierID, t.TierName "
+                + "FROM dbo.Customers c JOIN dbo.CustomerTiers t ON c.TierID = t.TierID "
                 + "WHERE c.CustomerID = ?";
 
         NextRewardInfo info = new NextRewardInfo();
@@ -186,36 +483,36 @@ public class LoyaltyDAO {
         try ( Connection cn = DBUtils.getConnection();  PreparedStatement st = cn.prepareStatement(sql)) {
 
             st.setInt(1, customerId);
-            ResultSet rs = st.executeQuery();
 
-            if (!rs.next()) {
-                return null;
+            int totalBookings;
+            int currentTierId;
+
+            try ( ResultSet rs = st.executeQuery()) {
+                if (!rs.next()) {
+                    return null;
+                }
+                totalBookings = rs.getInt("TotalBookings");
+                currentTierId = rs.getInt("TierID");
+                info.setCurrentTier(rs.getString("TierName"));
             }
 
-            int totalBookings = rs.getInt("TotalBookings");
-            int currentPriority = rs.getInt("PriorityLevel");
-            String currentTierName = rs.getString("TierName");
-
-            info.setCurrentTier(currentTierName);
-
-            List<CustomerTier> tiers = getAllTiers(); // ordered by PriorityLevel ASC
+            List<CustomerTier> tiers = getAllTiers(); // ascending TierID
 
             CustomerTier next = null;
             for (CustomerTier t : tiers) {
-                if (t.getPriorityLevel() > currentPriority) {
+                if (t.getTierID() > currentTierId) {
                     next = t;
                     break;
                 }
             }
 
             if (next == null) {
-                // already at the highest tier
                 info.setMaxTierReached(true);
                 info.setNextTier("-");
                 info.setRemainBookings(0);
                 info.setProgressPercent(100);
                 info.setNextPointBonusPercent(0);
-                info.setNextPriorityLevel(currentPriority);
+                info.setNextPriorityLevel(currentTierId);
             } else {
                 info.setMaxTierReached(false);
                 info.setNextTier(next.getTierName());
@@ -238,362 +535,53 @@ public class LoyaltyDAO {
     }
 
     // =========================================================
-    // EARN POINTS (called when a booking is marked Completed)
+    // PRIVATE HELPERS (original)
     // =========================================================
-    /**
-     * Awards loyalty points for a completed booking, updates the
-     * customer's PointsBalance / TotalSpent / TotalBookings, and logs an
-     * EARN transaction that expires in 12 months.
-     *
-     * @param bookingId the completed booking
-     * @return true if points were awarded
-     */
-    public boolean earnPointsForBooking(int bookingId) {
+    private int calcTier(int totalBookings, double totalSpent) {
+        if (totalBookings >= 30 || totalSpent >= 15000000) return 4;
+        if (totalBookings >= 15 || totalSpent >= 6000000)  return 3;
+        if (totalBookings >= 5  || totalSpent >= 2000000)  return 2;
+        return 1;
+    }
 
-        String getBookingSql = "SELECT CustomerID, TotalAmount FROM Bookings WHERE BookingID = ?";
-        String getBonusSql = "SELECT t.PointBonusPercent FROM Customers c "
-                + "JOIN CustomerTiers t ON c.TierID = t.TierID WHERE c.CustomerID = ?";
-        String insertTxnSql = "INSERT INTO Loyalty_Transactions "
-                + "(CustomerID, BookingID, TransactionType, Points, Description, TransactionDate, ExpiryDate, IsExpired) "
-                + "VALUES (?, ?, 'EARN', ?, ?, CAST(GETDATE() AS DATE), DATEADD(MONTH, ?, CAST(GETDATE() AS DATE)), 0)";
-        String updateCustomerSql = "UPDATE Customers SET PointsBalance = PointsBalance + ?, "
-                + "TotalSpent = TotalSpent + ?, TotalBookings = TotalBookings + 1 WHERE CustomerID = ?";
+    private int getBonusPercent(int customerID) {
+        String sql = "SELECT T.PointBonusPercent "
+                + "FROM dbo.Customers C "
+                + "JOIN dbo.CustomerTiers T ON C.TierID = T.TierID "
+                + "WHERE C.CustomerID = ?";
 
-        Connection cn = null;
-
-        try {
-            cn = DBUtils.getConnection();
-            cn.setAutoCommit(false);
-
-            int customerId;
-            double totalAmount;
-
-            try ( PreparedStatement st = cn.prepareStatement(getBookingSql)) {
-                st.setInt(1, bookingId);
-                ResultSet rs = st.executeQuery();
-                if (!rs.next()) {
-                    cn.rollback();
-                    return false;
-                }
-                customerId = rs.getInt("CustomerID");
-                totalAmount = rs.getDouble("TotalAmount");
-            }
-
-            int bonusPercent = 0;
-            try ( PreparedStatement st = cn.prepareStatement(getBonusSql)) {
-                st.setInt(1, customerId);
-                ResultSet rs = st.executeQuery();
-                if (rs.next()) {
-                    bonusPercent = rs.getInt("PointBonusPercent");
+        try ( Connection cn = DBUtils.getConnection();  PreparedStatement st = cn.prepareStatement(sql)) {
+            st.setInt(1, customerID);
+            try ( ResultSet table = st.executeQuery()) {
+                if (table.next()) {
+                    return table.getInt("PointBonusPercent");
                 }
             }
-
-            int basePoints = (int) (totalAmount / VND_PER_POINT);
-            int bonusPoints = (int) (basePoints * bonusPercent / 100.0);
-            int totalPoints = basePoints + bonusPoints;
-
-            try ( PreparedStatement st = cn.prepareStatement(insertTxnSql)) {
-                st.setInt(1, customerId);
-                st.setInt(2, bookingId);
-                st.setInt(3, totalPoints);
-                st.setString(4, "Earned from booking #" + bookingId);
-                st.setInt(5, POINT_EXPIRY_MONTHS);
-                st.executeUpdate();
-            }
-
-            try ( PreparedStatement st = cn.prepareStatement(updateCustomerSql)) {
-                st.setInt(1, totalPoints);
-                st.setDouble(2, totalAmount);
-                st.setInt(3, customerId);
-                st.executeUpdate();
-            }
-
-            cn.commit();
-            return true;
-
         } catch (Exception e) {
             e.printStackTrace();
-            try {
-                if (cn != null) {
-                    cn.rollback();
-                }
-            } catch (Exception ex) {
-                ex.printStackTrace();
-            }
-            return false;
-        } finally {
-            try {
-                if (cn != null) {
-                    cn.setAutoCommit(true);
-                    cn.close();
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    // =========================================================
-    // REDEMPTION: points -> reward (discount / free wash / free wax...)
-    // =========================================================
-    public int redeemPoints(int customerId, int rewardId) {
-
-        Reward reward = getRewardById(rewardId);
-
-        if (reward == null || !reward.isActive()) {
-            return REDEEM_REWARD_NOT_FOUND;
-        }
-
-        String getBalanceSql = "SELECT PointsBalance FROM Customers WHERE CustomerID = ?";
-        String insertTxnSql = "INSERT INTO Loyalty_Transactions "
-                + "(CustomerID, BookingID, TransactionType, Points, Description, TransactionDate, ExpiryDate, IsExpired) "
-                + "VALUES (?, NULL, 'REDEEM', ?, ?, CAST(GETDATE() AS DATE), NULL, 0)";
-        String updateBalanceSql = "UPDATE Customers SET PointsBalance = PointsBalance - ? WHERE CustomerID = ?";
-
-        Connection cn = null;
-
-        try {
-            cn = DBUtils.getConnection();
-            cn.setAutoCommit(false);
-
-            int balance = 0;
-            try ( PreparedStatement st = cn.prepareStatement(getBalanceSql)) {
-                st.setInt(1, customerId);
-                ResultSet rs = st.executeQuery();
-                if (rs.next()) {
-                    balance = rs.getInt("PointsBalance");
-                }
-            }
-
-            if (balance < reward.getPointsRequired()) {
-                cn.rollback();
-                return REDEEM_NOT_ENOUGH_POINTS;
-            }
-
-            try ( PreparedStatement st = cn.prepareStatement(insertTxnSql)) {
-                st.setInt(1, customerId);
-                // stored as a negative amount so SUM(Points) reflects the running balance
-                st.setInt(2, -reward.getPointsRequired());
-                st.setString(3, "Redeemed: " + reward.getRewardName());
-                st.executeUpdate();
-            }
-
-            try ( PreparedStatement st = cn.prepareStatement(updateBalanceSql)) {
-                st.setInt(1, reward.getPointsRequired());
-                st.setInt(2, customerId);
-                st.executeUpdate();
-            }
-
-            cn.commit();
-            return REDEEM_SUCCESS;
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            try {
-                if (cn != null) {
-                    cn.rollback();
-                }
-            } catch (Exception ex) {
-                ex.printStackTrace();
-            }
-            return REDEEM_ERROR;
-        } finally {
-            try {
-                if (cn != null) {
-                    cn.setAutoCommit(true);
-                    cn.close();
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    // =========================================================
-    // AUTO UPGRADE / DOWNGRADE (run manually by Admin)
-    // =========================================================
-    /**
-     * Reviews every active customer's TotalBookings / TotalSpent against
-     * CustomerTiers thresholds and moves them to the highest tier they
-     * qualify for (upgrade or downgrade). Returns a human-readable log
-     * for the admin screen.
-     */
-    public List<String> runTierReview() {
-
-        List<String> log = new ArrayList<>();
-
-        String customersSql = "SELECT CustomerID, FullName, TierID, TotalBookings, TotalSpent "
-                + "FROM Customers WHERE Status = 1 AND roleId = 2";
-        String updateSql = "UPDATE Customers SET TierID = ? WHERE CustomerID = ?";
-
-        List<CustomerTier> tiers = getAllTiers(); // ascending PriorityLevel
-
-        try ( Connection cn = DBUtils.getConnection();  PreparedStatement st = cn.prepareStatement(customersSql);  ResultSet rs = st.executeQuery()) {
-
-            while (rs.next()) {
-
-                int custId = rs.getInt("CustomerID");
-                String name = rs.getString("FullName");
-                int currentTierId = rs.getInt("TierID");
-                int totalBookings = rs.getInt("TotalBookings");
-                double totalSpent = rs.getDouble("TotalSpent");
-
-                CustomerTier qualified = tiers.get(0); // default: lowest tier (Member)
-
-                for (CustomerTier t : tiers) {
-                    if (totalBookings >= t.getMinBookings() || totalSpent >= t.getMinSpend()) {
-                        qualified = t; // tiers is ascending, so the loop keeps the highest match
-                    }
-                }
-
-                if (qualified.getTierID() != currentTierId) {
-
-                    try ( PreparedStatement up = cn.prepareStatement(updateSql)) {
-                        up.setInt(1, qualified.getTierID());
-                        up.setInt(2, custId);
-                        up.executeUpdate();
-                    }
-
-                    String oldName = tierNameOf(tiers, currentTierId);
-                    String direction = qualified.getPriorityLevel() > priorityOf(tiers, currentTierId)
-                            ? "UPGRADED" : "DOWNGRADED";
-
-                    log.add(name + " (ID " + custId + "): " + oldName + " -> "
-                            + qualified.getTierName() + " [" + direction + "]");
-                }
-            }
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            log.add("ERROR while running tier review: " + e.getMessage());
-        }
-
-        if (log.isEmpty()) {
-            log.add("No tier changes. Everyone is already in the correct tier.");
-        }
-
-        return log;
-    }
-
-    private String tierNameOf(List<CustomerTier> tiers, int tierId) {
-        for (CustomerTier t : tiers) {
-            if (t.getTierID() == tierId) {
-                return t.getTierName();
-            }
-        }
-        return "Unknown";
-    }
-
-    private int priorityOf(List<CustomerTier> tiers, int tierId) {
-        for (CustomerTier t : tiers) {
-            if (t.getTierID() == tierId) {
-                return t.getPriorityLevel();
-            }
         }
         return 0;
     }
 
-    // =========================================================
-    // EXPIRY: points expire after 12 months (run manually by Admin)
-    // =========================================================
-    public List<String> runPointsExpiry() {
+    private int getPointsBalance(int customerID) {
+        String sql = "SELECT PointsBalance FROM dbo.Customers WHERE CustomerID = ?";
 
-        List<String> log = new ArrayList<>();
-
-        String findExpiredSql = "SELECT CustomerID, SUM(Points) AS ExpiredPoints "
-                + "FROM Loyalty_Transactions "
-                + "WHERE TransactionType = 'EARN' AND (IsExpired = 0 OR IsExpired IS NULL) "
-                + "AND ExpiryDate < CAST(GETDATE() AS DATE) "
-                + "GROUP BY CustomerID";
-
-        String markExpiredSql = "UPDATE Loyalty_Transactions SET IsExpired = 1 "
-                + "WHERE CustomerID = ? AND TransactionType = 'EARN' "
-                + "AND (IsExpired = 0 OR IsExpired IS NULL) AND ExpiryDate < CAST(GETDATE() AS DATE)";
-
-        String getBalanceSql = "SELECT PointsBalance, FullName FROM Customers WHERE CustomerID = ?";
-
-        String updateBalanceSql = "UPDATE Customers SET PointsBalance = ? WHERE CustomerID = ?";
-
-        String insertExpireTxnSql = "INSERT INTO Loyalty_Transactions "
-                + "(CustomerID, BookingID, TransactionType, Points, Description, TransactionDate, ExpiryDate, IsExpired) "
-                + "VALUES (?, NULL, 'EXPIRE', ?, 'Points expired after 12 months', CAST(GETDATE() AS DATE), NULL, 1)";
-
-        Connection cn = null;
-
-        try {
-            cn = DBUtils.getConnection();
-            cn.setAutoCommit(false);
-
-            try ( PreparedStatement find = cn.prepareStatement(findExpiredSql)) {
-
-                ResultSet rs = find.executeQuery();
-
-                while (rs.next()) {
-                    int custId = rs.getInt("CustomerID");
-                    int expiredPoints = rs.getInt("ExpiredPoints");
-
-                    int currentBalance = 0;
-                    String name = "";
-                    try ( PreparedStatement bal = cn.prepareStatement(getBalanceSql)) {
-                        bal.setInt(1, custId);
-                        ResultSet br = bal.executeQuery();
-                        if (br.next()) {
-                            currentBalance = br.getInt("PointsBalance");
-                            name = br.getString("FullName");
-                        }
-                    }
-
-                    int newBalance = Math.max(0, currentBalance - expiredPoints);
-
-                    try ( PreparedStatement up = cn.prepareStatement(updateBalanceSql)) {
-                        up.setInt(1, newBalance);
-                        up.setInt(2, custId);
-                        up.executeUpdate();
-                    }
-
-                    try ( PreparedStatement mark = cn.prepareStatement(markExpiredSql)) {
-                        mark.setInt(1, custId);
-                        mark.executeUpdate();
-                    }
-
-                    try ( PreparedStatement ins = cn.prepareStatement(insertExpireTxnSql)) {
-                        ins.setInt(1, custId);
-                        ins.setInt(2, -expiredPoints);
-                        ins.executeUpdate();
-                    }
-
-                    log.add(name + " (ID " + custId + "): " + expiredPoints
-                            + " points expired (balance " + currentBalance + " -> " + newBalance + ")");
+        try ( Connection cn = DBUtils.getConnection();  PreparedStatement st = cn.prepareStatement(sql)) {
+            st.setInt(1, customerID);
+            try ( ResultSet table = st.executeQuery()) {
+                if (table.next()) {
+                    return table.getInt("PointsBalance");
                 }
             }
-
-            cn.commit();
-
         } catch (Exception e) {
             e.printStackTrace();
-            log.add("ERROR while running points expiry: " + e.getMessage());
-            try {
-                if (cn != null) {
-                    cn.rollback();
-                }
-            } catch (Exception ex) {
-                ex.printStackTrace();
-            }
-        } finally {
-            try {
-                if (cn != null) {
-                    cn.setAutoCommit(true);
-                    cn.close();
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
         }
+        return 0;
+    }
 
-        if (log.isEmpty()) {
-            log.add("No points expired today.");
-        }
-
-        return log;
+    private Date getExpiryDate() {
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        cal.add(java.util.Calendar.MONTH, 12);
+        return new Date(cal.getTimeInMillis());
     }
 }
