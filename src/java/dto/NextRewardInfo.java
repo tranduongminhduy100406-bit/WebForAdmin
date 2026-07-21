@@ -1,7 +1,3 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package dto;
 
 public class NextRewardInfo {
@@ -10,8 +6,9 @@ public class NextRewardInfo {
     private String nextTier;
     private int remainBookings;
     private int progressPercent;
-    private double nextDiscount;
+    private int nextPointBonusPercent;
     private int nextPriorityLevel;
+    private boolean maxTierReached;
 
     public String getCurrentTier() {
         return currentTier;
@@ -45,12 +42,12 @@ public class NextRewardInfo {
         this.progressPercent = progressPercent;
     }
 
-    public double getNextDiscount() {
-        return nextDiscount;
+    public int getNextPointBonusPercent() {
+        return nextPointBonusPercent;
     }
 
-    public void setNextDiscount(double nextDiscount) {
-        this.nextDiscount = nextDiscount;
+    public void setNextPointBonusPercent(int nextPointBonusPercent) {
+        this.nextPointBonusPercent = nextPointBonusPercent;
     }
 
     public int getNextPriorityLevel() {
@@ -59,5 +56,13 @@ public class NextRewardInfo {
 
     public void setNextPriorityLevel(int nextPriorityLevel) {
         this.nextPriorityLevel = nextPriorityLevel;
+    }
+
+    public boolean isMaxTierReached() {
+        return maxTierReached;
+    }
+
+    public void setMaxTierReached(boolean maxTierReached) {
+        this.maxTierReached = maxTierReached;
     }
 }
