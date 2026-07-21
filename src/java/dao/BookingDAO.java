@@ -164,4 +164,22 @@ public class BookingDAO {
         return list;
     }
 
+
+        public boolean updateBookingStatus(int bookingId, String status) {
+
+        String sql = "UPDATE Bookings SET BookingStatus = ? WHERE BookingID = ?";
+
+        try ( Connection cn = DBUtils.getConnection();  PreparedStatement st = cn.prepareStatement(sql)) {
+
+            st.setString(1, status);
+            st.setInt(2, bookingId);
+
+            return st.executeUpdate() > 0;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
 }
