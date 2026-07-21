@@ -1,3 +1,4 @@
+package dao;
 
 import dbutils.DBUtils;
 import dto.CustomerTier;
