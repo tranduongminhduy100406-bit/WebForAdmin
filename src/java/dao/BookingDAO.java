@@ -222,4 +222,63 @@ public class BookingDAO {
         }
     }
 
+        public boolean isSlotAvailable(String bookingDate, String slotTime) {
+
+        String sql = "SELECT COUNT(*) "
+                + "FROM Bookings "
+                + "WHERE CAST(BookingDate AS DATE) = ? "
+                + "AND SlotTime = ?";
+    
+        try (
+                Connection cn = DBUtils.getConnection();
+                PreparedStatement st = cn.prepareStatement(sql)
+        ) {
+    
+            st.setString(1, bookingDate);
+            st.setString(2, slotTime);
+    
+            ResultSet rs = st.executeQuery();
+    
+            if (rs.next()) {
+                int count = rs.getInt(1);
+    
+                // Tối đa 5 booking trong 1 ngày + 1 slot
+                return count < 5;
+            }
+    
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    
+        return false;
+    }
+    
+    
+        public int getBookingCountByDateAndSlot(String bookingDate, String slotTime) {
+    
+        String sql = "SELECT COUNT(*) "
+                + "FROM Bookings "
+                + "WHERE CAST(BookingDate AS DATE) = ? "
+                + "AND SlotTime = ?";
+    
+        try (
+                Connection cn = DBUtils.getConnection();
+                PreparedStatement st = cn.prepareStatement(sql)
+        ) {
+    
+            st.setString(1, bookingDate);
+            st.setString(2, slotTime);
+    
+            ResultSet rs = st.executeQuery();
+    
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+    
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    
+        return 0;
+    }
 }
