@@ -148,6 +148,24 @@
 
         </div>
 
+        <!-- Booking Operations -->
+
+        <div class="card">
+
+            <div class="icon">⚡</div>
+
+            <h3>Booking Operations</h3>
+
+            <p>
+                Check slot availability real-time and create new bookings.
+            </p>
+
+            <a href="create_booking.jsp" class="btn">
+                Open Booking Tool
+            </a>
+
+        </div>
+
         <!-- Placeholder -->
 
         <div class="card">
