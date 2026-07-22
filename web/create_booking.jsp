@@ -278,7 +278,7 @@
             <div class="form-grid">
                 <div class="form-group">
                     <label>Booking Date <span class="required">*</span></label>
-                    <input type="date" name="bookingDate" required value="${param.bookingDate}">
+                    <input type="date" id="bookingDate" name="bookingDate" required value="${param.bookingDate}">
                 </div>
 
                 <div class="form-group">
@@ -357,6 +357,31 @@
             }
         }
     </script>
+    
+    <script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const dateInput = document.getElementById("bookingDate");
+        
+        // 1. Lấy ngày hiện tại làm ngày tối thiểu (Today)
+        const today = new Date();
+        const yyyyMin = today.getFullYear();
+        const mmMin = String(today.getMonth() + 1).padStart(2, '0');
+        const ddMin = String(today.getDate()).padStart(2, '0');
+        const minDate = yyyyMin + "-" + mmMin + "-" + ddMin;
+
+        // 2. Tự động tính ngày tối đa (+7 ngày tới theo Tier Rule)
+        const maxDays = new Date();
+        maxDays.setDate(today.getDate() + 7);
+        const yyyyMax = maxDays.getFullYear();
+        const mmMax = String(maxDays.getMonth() + 1).padStart(2, '0');
+        const ddMax = String(maxDays.getDate()).padStart(2, '0');
+        const maxDate = yyyyMax + "-" + mmMax + "-" + ddMax;
+
+        // 3. Gán thuộc tính min và max cho input date
+        dateInput.setAttribute("min", minDate);
+        dateInput.setAttribute("max", maxDate);
+    });
+</script>
 
 </body>
-</html>
+</html> 
