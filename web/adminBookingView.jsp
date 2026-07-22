@@ -156,8 +156,13 @@
                            value="Search"
                            style="padding:10px 18px;">
 
+                    <a href="CheckBookingController"
+                   style="padding:10px 18px; background:#0077cc; text-decoration:none; color:white; border-radius:6px; font-weight:bold;">
+                    Check-in Today
+                               </a>
                 </form>
 
+                         
             </div>
             <table>
 

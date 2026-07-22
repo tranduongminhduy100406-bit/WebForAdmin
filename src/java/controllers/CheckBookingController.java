@@ -4,8 +4,8 @@
  */
 package controllers;
 
-import dao.CustomerDAO;
-import dto.Customer;
+import dao.CheckBookingDAO;
+import dto.BookingPriorityDTO;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.List;
@@ -19,8 +19,8 @@ import javax.servlet.http.HttpServletResponse;
  *
  * @author nguye
  */
-@WebServlet(name = "AdminAccountController", urlPatterns = {"/AdminAccountController"})
-public class AdminAccountController extends HttpServlet {
+@WebServlet(name = "CheckBookingController", urlPatterns = {"/CheckBookingController"})
+public class CheckBookingController extends HttpServlet {
 
     /**
      * Processes requests for both HTTP <code>GET</code> and <code>POST</code>
@@ -34,38 +34,21 @@ public class AdminAccountController extends HttpServlet {
     protected void processRequest(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         response.setContentType("text/html;charset=UTF-8");
-        try ( PrintWriter out = response.getWriter()) {
-            /* TODO output your page here. You may use following sample code. */
-            CustomerDAO dao = new CustomerDAO();
 
-            String action = request.getParameter("action");
-            if ("makeAdmin".equals(action)) {
-                int customerID = Integer.parseInt(request.getParameter("id"));
-                dao.updateRoleToAdmin(customerID);
-                //submit xong redirect lai trang chinh de tranh submit lai khi f5
-                response.sendRedirect("AdminAccountController");
-                return;
-            }
+        CheckBookingDAO dao = new CheckBookingDAO();
 
-            if ("removeAdmin".equals(action)) {
-                int customerId = Integer.parseInt(request.getParameter("id"));
-                dao.updateRoleToCustomer(customerId);
-                response.sendRedirect("AdminAccountController");
-                return;
-            }
-
-            String keyword = request.getParameter("keyword");
-            List<Customer> customerList = dao.getAllCustomer();
-
-            if (keyword != null && !keyword.trim().isEmpty()) {
-                customerList = dao.searchCustomer(keyword.trim());
-            } else {
-                customerList = dao.getAllCustomer();
-            }
-            request.setAttribute("KEYWORD", keyword); // giu lai gia tri trong o
-            request.setAttribute("customerList", customerList);
-            request.getRequestDispatcher("adminAccountView.jsp").forward(request, response);
+        String action = request.getParameter("action");
+        if ("complete".equals(action)) {
+            int bookingId = Integer.parseInt(request.getParameter("id"));
+            dao.updateStatusToCompleted(bookingId);
+            response.sendRedirect("CheckBookingController");
+            return;
         }
+
+        List<BookingPriorityDTO> todayList = dao.getTodayBookingsByPriority();
+
+        request.setAttribute("todayList", todayList);
+        request.getRequestDispatcher("checkBookingToday.jsp").forward(request, response);
     }
 
     // <editor-fold defaultstate="collapsed" desc="HttpServlet methods. Click on the + sign on the left to edit the code.">
