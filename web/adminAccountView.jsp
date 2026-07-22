@@ -112,7 +112,7 @@
 
         <div class="container">
 
-            <h2>Account Management</h2>
+            <h2>Account & Role Management</h2>
 
             <div class="top">
 
@@ -148,9 +148,9 @@
                     <th>PhoneNumber</th>
                     <th>Email</th>
                     <th>Address</th>
-                    <th>TierID</th>
+                    <th>RoleID</th>
                     <th>Status</th>
-                    <th>Edit</th>
+                    <th>Make Admin</th>
 
                 </tr>
 
@@ -159,18 +159,38 @@
                     <tr>
 
                         <td>${c.id}</td>
-                        
+
                         <td>${c.fullname}</td>
-                        
+
                         <td>${c.phone}</td>
-                        
+
                         <td>${c.email}</td>
-                        
+
                         <td>${c.address}</td>
-                        
-                        <td>${c.tierId}</td>
-                        
+
+                        <td>${c.roleId}</td>
+
                         <td>${c.status}</td>
+
+                        <td>
+                            <c:choose>
+                                <c:when test="${c.roleId == 1}">
+                                    <a href="AdminAccountController?action=removeAdmin&id=${c.id}"
+                                       class="btn"
+                                       style="background:#dc3545;"
+                                    >
+                                        Remove Admin
+                                    </a>
+                                </c:when>
+                                <c:otherwise>
+                                    <a href="AdminAccountController?action=makeAdmin&id=${c.id}"
+                                       class="btn update"
+                                    >
+                                        Make Admin
+                                    </a>
+                                </c:otherwise>
+                            </c:choose>
+                        </td>
 
 
 

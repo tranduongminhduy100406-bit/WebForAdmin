@@ -154,10 +154,10 @@
 
             <div class="icon">👥</div>
 
-            <h3>Manage Account</h3>
+            <h3>Manage Account & Role</h3>
 
             <p>
-                View all accounts and update account.
+                View all accounts and update role for account.
             </p>
 
             <a href="AdminAccountController" class="btn">

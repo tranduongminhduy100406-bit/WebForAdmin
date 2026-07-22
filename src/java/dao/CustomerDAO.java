@@ -219,6 +219,8 @@ public class CustomerDAO {
         return result;
     }
 
+    /////////////////////////////////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////////////////////////////
     public List<Customer> getAllCustomer() {
         List<Customer> list = new ArrayList<>();
         String sql = "SELECT [CustomerID]\n"
@@ -308,5 +310,37 @@ public class CustomerDAO {
             e.printStackTrace();
         }
         return list;
+    }
+
+    public boolean updateRoleToAdmin(int customerId) {
+        boolean result = false;
+        String sql = "UPDATE [CarWashPJG5].[dbo].[Customers] SET [roleId] = 1 WHERE [CustomerID] = ?";
+
+        try ( Connection cn = DBUtils.getConnection();  PreparedStatement st = cn.prepareStatement(sql)) {
+
+            st.setInt(1, customerId);
+            int rowsAffected = st.executeUpdate();
+            result = rowsAffected > 0;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return result;
+    }
+
+    public boolean updateRoleToCustomer(int customerId) {
+        boolean result = false;
+        String sql = "UPDATE [CarWashPJG5].[dbo].[Customers] SET [roleId] = 2 WHERE [CustomerID] = ?";
+
+        try ( Connection cn = DBUtils.getConnection();  PreparedStatement st = cn.prepareStatement(sql)) {
+
+            st.setInt(1, customerId);
+            int rowsAffected = st.executeUpdate();
+            result = rowsAffected > 0;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return result;
     }
 }

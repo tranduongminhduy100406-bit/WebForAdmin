@@ -3,203 +3,208 @@
 
 <!DOCTYPE html>
 <html>
-<head>
-    <meta charset="UTF-8">
-    <title>Booking Management</title>
+    <head>
+        <meta charset="UTF-8">
+        <title>Booking Management</title>
 
-    <style>
-        *{
-            margin:0;
-            padding:0;
-            box-sizing:border-box;
-            font-family:Arial;
-        }
+        <style>
+            *{
+                margin:0;
+                padding:0;
+                box-sizing:border-box;
+                font-family:Arial;
+            }
 
-        body{
-            background:#f4f6f9;
-        }
+            body{
+                background:#f4f6f9;
+            }
 
-        .container{
-            width:95%;
-            margin:30px auto;
-        }
+            .container{
+                width:95%;
+                margin:30px auto;
+            }
 
-        h2{
-            text-align:center;
-            color:#0077cc;
-            margin-bottom:25px;
-        }
+            h2{
+                text-align:center;
+                color:#0077cc;
+                margin-bottom:25px;
+            }
 
-        .top{
-            display:flex;
-            justify-content:space-between;
-            margin-bottom:20px;
-        }
+            .top{
+                display:flex;
+                justify-content:space-between;
+                margin-bottom:20px;
+            }
 
-        .backBtn{
-            text-decoration:none;
-            background:#6c757d;
-            color:white;
-            padding:10px 18px;
-            border-radius:8px;
-            font-weight:bold;
-        }
+            .backBtn{
+                text-decoration:none;
+                background:#6c757d;
+                color:white;
+                padding:10px 18px;
+                border-radius:8px;
+                font-weight:bold;
+            }
 
-        table{
-            width:100%;
-            border-collapse:collapse;
-            background:white;
-            box-shadow:0 5px 15px rgba(0,0,0,.15);
-        }
+            table{
+                width:100%;
+                border-collapse:collapse;
+                background:white;
+                box-shadow:0 5px 15px rgba(0,0,0,.15);
+            }
 
-        th{
-            background:#0077cc;
-            color:white;
-            padding:12px;
-        }
+            th{
+                background:#0077cc;
+                color:white;
+                padding:12px;
+            }
 
-        td{
-            padding:10px;
-            text-align:center;
-            border-bottom:1px solid #ddd;
-        }
+            td{
+                padding:10px;
+                text-align:center;
+                border-bottom:1px solid #ddd;
+            }
 
-        tr:hover{
-            background:#f2f2f2;
-        }
+            tr:hover{
+                background:#f2f2f2;
+            }
 
-        .pending{
-            color:orange;
-            font-weight:bold;
-        }
+            .pending{
+                color:orange;
+                font-weight:bold;
+            }
 
-        .completed{
-            color:green;
-            font-weight:bold;
-        }
+            .completed{
+                color:green;
+                font-weight:bold;
+            }
 
-        .cancelled{
-            color:red;
-            font-weight:bold;
-        }
+            .cancelled{
+                color:red;
+                font-weight:bold;
+            }
 
-        .btn{
-            padding:6px 12px;
-            border:none;
-            border-radius:6px;
-            cursor:pointer;
-            color:white;
-            text-decoration:none;
-            font-size:13px;
-        }
+            .btn{
+                padding:6px 12px;
+                border:none;
+                border-radius:6px;
+                cursor:pointer;
+                color:white;
+                text-decoration:none;
+                font-size:13px;
+            }
 
-        .update{
-            background:#28a745;
-        }
+            .update{
+                background:#28a745;
+            }
 
-        .view{
-            background:#17a2b8;
-        }
-    </style>
+            .view{
+                background:#17a2b8;
+            }
+        </style>
 
-</head>
+    </head>
 
-<body>
+    <body>
 
-<div class="container">
+        <div class="container">
 
-    <h2>Booking Management</h2>
+            <h2>Booking Management</h2>
 
-    <div class="top">
+            <div class="top">
 
-        <a href="adminDashboard.jsp" class="backBtn">
-            ← Back Dashboard
-        </a>
+                <a href="adminDashboard.jsp" class="backBtn">
+                    ← Back Dashboard
+                </a>
 
-    </div>
+            </div>
 
-    <div style="margin-bottom:20px;">
+            <div style="margin-bottom:20px;">
 
-<form action="AdminBookingController" method="get">
+                <form action="AdminBookingController" method="get">
 
-<input type="text"
-       name="keyword"
-       value="${KEYWORD}"
-       placeholder="Search Booking ID, Customer ID, License Plate"
-       style="padding:10px;width:300px;">
+                    <input type="text"
+                           name="keyword"
+                           value="${KEYWORD}"
+                           placeholder="Search Booking ID, Customer ID, License Plate"
+                           style="padding:10px;width:300px;">
 
-<input type="submit"
-       value="Search"
-       style="padding:10px 18px;">
+                    <input type="submit"
+                           value="Search"
+                           style="padding:10px 18px;">
 
-</form>
+                </form>
 
-</div>
-    <table>
+                <a href="CheckBookingController"
+                   style="padding:10px 18px; background:#0077cc; text-decoration:none; color:white; border-radius:6px; font-weight:bold;">
+                    Check-in Today
+                </a>
 
-        <tr>
+            </div>
+            <table>
 
-            <th>ID</th>
-            <th>Customer</th>
-            <th>Vehicle</th>
-            <th>Date</th>
-            <th>Slot</th>
-            <th>Service</th>
-            <th>Status</th>
+                <tr>
 
-        </tr>
+                    <th>ID</th>
+                    <th>Customer</th>
+                    <th>Vehicle</th>
+                    <th>Date</th>
+                    <th>Slot</th>
+                    <th>Service</th>
+                    <th>Status</th>
 
-        <c:forEach var="b" items="${LIST}">
+                </tr>
 
-            <tr>
+                <c:forEach var="b" items="${LIST}">
 
-                <td>${b.bookingID}</td>
+                    <tr>
 
-                <td>${b.customerID}</td>
+                        <td>${b.bookingID}</td>
 
-                <td>${b.licensePlate}</td>
+                        <td>${b.customerID}</td>
 
-                <td>${b.bookingDate}</td>
+                        <td>${b.licensePlate}</td>
 
-                <td>${b.slotTime}</td>
+                        <td>${b.bookingDate}</td>
 
-                <td>${b.serviceType}</td>
+                        <td>${b.slotTime}</td>
 
-                <td>
+                        <td>${b.serviceType}</td>
 
-                    <c:choose>
+                        <td>
 
-                        <c:when test="${b.bookingStatus=='Pending'}">
-                            <span class="pending">
-                                ${b.bookingStatus}
-                            </span>
-                        </c:when>
+                            <c:choose>
 
-                        <c:when test="${b.bookingStatus=='Completed'}">
-                            <span class="completed">
-                                ${b.bookingStatus}
-                            </span>
-                        </c:when>
+                                <c:when test="${b.bookingStatus=='Pending'}">
+                                    <span class="pending">
+                                        ${b.bookingStatus}
+                                    </span>
+                                </c:when>
 
-                        <c:otherwise>
-                            <span class="cancelled">
-                                ${b.bookingStatus}
-                            </span>
-                        </c:otherwise>
+                                <c:when test="${b.bookingStatus=='Completed'}">
+                                    <span class="completed">
+                                        ${b.bookingStatus}
+                                    </span>
+                                </c:when>
 
-                    </c:choose>
+                                <c:otherwise>
+                                    <span class="cancelled">
+                                        ${b.bookingStatus}
+                                    </span>
+                                </c:otherwise>
 
-                </td>
+                            </c:choose>
 
-  
+                        </td>
 
-            </tr>
 
-        </c:forEach>
 
-    </table>
+                    </tr>
 
-</div>
+                </c:forEach>
 
-</body>
+            </table>
+
+        </div>
+
+    </body>
 </html>
